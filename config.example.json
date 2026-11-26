@@ -1,0 +1,83 @@
+{
+  "agent_ui_port": 8090,
+  "wifi_iface": "wlan0",
+  "lte_prefixes": [
+    "ww",
+    "usb",
+    "ppp",
+    "rmnet",
+    "enx"
+  ],
+  "link": {
+    "wifi_metric": 600,
+    "lte_metric": 700,
+    "forced_lte_metric": 50
+  },
+  "lte": {
+    "shaping": {
+      "enabled": true,
+      "when": "active",
+      "share": 0.85,
+      "min_kbit": 300,
+      "max_kbit": 20000,
+      "fallback_kbit": 2000,
+      "options": "besteffort"
+    },
+    "speedtest": {
+      "enabled": true,
+      "url": "https://speed.cloudflare.com/__up",
+      "bytes": 3000000,
+      "max_seconds": 25,
+      "retest_minutes": 30,
+      "daily_mb_cap": 60,
+      "busy_kbit": 400
+    },
+    "video_share": 0.6
+  },
+  "hotspot": {
+    "enabled": true,
+    "grace_seconds": 60,
+    "retry_seconds": 300,
+    "ssid": ""
+  },
+  "tft": {
+    "enabled": true,
+    "spi_bus": 0,
+    "spi_device": 0,
+    "speed_hz": 16000000,
+    "dc_pin": 25,
+    "rst_pin": 24,
+    "blk_pin": null,
+    "width": 128,
+    "height": 160,
+    "rotation": 90,
+    "col_offset": 0,
+    "row_offset": 0,
+    "bgr": false,
+    "invert": false,
+    "dashboard_seconds": 8,
+    "messages_seconds": 5,
+    "setup_seconds": 6,
+    "udp_listen": "127.0.0.1:14601",
+    "alert_hold_seconds": 60,
+    "link_timeout_seconds": 5
+  },
+  "display": {
+    "enabled": false,
+    "i2c_bus": 1,
+    "i2c_address": 60,
+    "rotate_180": false,
+    "page_seconds": 5,
+    "controller": "ssd1306"
+  },
+  "fc_display": {
+    "enabled": false,
+    "i2c_bus": 1,
+    "i2c_address": 61,
+    "rotate_180": false,
+    "controller": "ssd1306",
+    "udp_listen": "127.0.0.1:14601",
+    "alert_hold_seconds": 60,
+    "link_timeout_seconds": 5
+  }
+}
