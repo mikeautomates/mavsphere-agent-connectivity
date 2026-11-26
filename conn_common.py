@@ -46,7 +46,7 @@ DEFAULTS = {
             "daily_mb_cap": 60,    # stop automatic tests after this much test upload per day
             "busy_kbit": 400,      # skip automatic tests while the link is already sending this much (a stream)
         },
-        "video_share": 0.6,        # recommended_video_kbps = measured upload x this
+        "video_share": 0.25,       # recommended_video_kbps = measured upload x this
         "modem_at_port": "/dev/ttyUSB2",   # EC25 AT port, for signal strength ("" to disable)
         "signal_poll_seconds": 20,
     },
@@ -55,6 +55,7 @@ DEFAULTS = {
         "grace_seconds": 150,    # no wifi for this long -> start the setup hotspot (slow boots need time)
         "retry_seconds": 300,    # hotspot idle (no clients) this long -> stop and retry home wifi
         "ssid": "",              # empty = "<hostname>-setup"
+        "password": "mav12345",  # fixed WPA2 key (8-63 chars); empty = a new random one each time
         "profile": "mav-hotspot",
     },
     # 0.96" I2C OLED: LTE signal + data use, alternating with a live upload graph.
@@ -86,6 +87,14 @@ DEFAULTS = {
         "container": "mavsphere-agent",
         "settle_seconds": 8,
         "min_interval_seconds": 90,
+        # Video bitrate written into the agent's config when the link changes (and when the
+        # controller first sees a link). The agent needs >= 100000. Set enabled=false to manage it by hand.
+        "bitrate": {
+            "enabled": True,
+            "wifi_bps": 5000000,
+            "lte_bps": 150000,
+            "api": "http://127.0.0.1:8090",
+        },
     },
     # 1.8" ST7735S SPI colour TFT: connectivity + flight-controller status on one screen.
     "tft": {

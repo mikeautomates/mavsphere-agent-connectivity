@@ -63,6 +63,14 @@ OLED at the same time (same port).
   connectivity service restarts the agent container after the new link has been stable for 8 s, so the agent
   reconnects straight away instead of waiting for old connections to time out. No Pi reboot is needed. Set
   `agent.restart_on_egress_change` to false to turn this off. It never fires at startup or more than once per 90 s.
+
+**Video bitrate per link.** When the active link changes (and once when the controller first sees a link), the
+service also writes the video bitrate for that link into the agent's config through the agent's own API
+(`127.0.0.1:8090`) and restarts the agent so it takes effect: `agent.bitrate.wifi_bps` (default 5000000) on WiFi,
+`agent.bitrate.lte_bps` (default 150000) on LTE. Only `h264BitrateBps` and `webrtcMaxBitrateBps` are changed; the
+pairing token is untouched. The agent rejects values below 100000, so that is the floor. Set
+`agent.bitrate.enabled` to false to manage the bitrate by hand. A bitrate edited by hand in the agent UI is kept
+until the next link change.
 - **Agent page hint:** `agent-lte-hint.patch` (in this package; apply it in the agent repo with `git apply`, then rebuild the image) adds a small panel to the agent's settings page showing
   the active link and the recommended LTE bitrate, with buttons that fill in the H.264 and WebRTC max fields.
   It reads `http://127.0.0.1:8091/api/lte-hint`, which the Pi itself can read without a login.
@@ -84,7 +92,7 @@ OLED at the same time (same port).
   reboot starts from it; before any measurement `fallback_kbit` (2000) is used. A failed test keeps the old value.
   Run `sudo mavsphere-conn speedtest` while on WiFi (LTE idle) to pre-measure; it uses about 3 MB of LTE data.
 - **For the agent:** state.json has `link_mode` and `lte` (`upload_kbps`, `shaping`, `recommended_video_kbps` =
-  60% of upload). The agent can read it, and when `egress.label` is `LTE` cap its video bitrate (e.g. WebRTC max)
+  25% of upload). The agent can read it, and when `egress.label` is `LTE` cap its video bitrate (e.g. WebRTC max)
   to `recommended_video_kbps`. Until then set the agent's max bitrate for LTE by hand.
 
 ## Install
@@ -165,3 +173,10 @@ only in `hotspot.json` (mode 0600).
 - `journalctl -u mavsphere-oled -f`
 - `sudo i2cdetect -y 1` should show `3c`.
 - `journalctl -u mavsphere-connectivity` shows `[hotspot]`, `[portal]` and `[join]` lines.
+
+## Fixed hotspot password
+
+The setup hotspot (`<hostname>-setup`) uses the fixed password `hotspot.password` (default `mav12345`; change it in
+`/etc/mavsphere-connectivity/config.json`, 8 to 63 characters, then restart the service). Set it to an empty string
+for a new random password each time the hotspot starts, shown on the TFT. Anyone who knows it can join the hotspot and reach the agent's config page
+(port 8090, no login), so pick something not easily guessed.

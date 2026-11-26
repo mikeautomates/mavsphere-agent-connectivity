@@ -40,7 +40,7 @@
       "daily_mb_cap": 60,
       "busy_kbit": 400
     },
-    "video_share": 0.6,
+    "video_share": 0.25,
     "modem_at_port": "/dev/ttyUSB2",
     "signal_poll_seconds": 20
   },
@@ -49,6 +49,7 @@
     "grace_seconds": 150,
     "retry_seconds": 300,
     "ssid": "",
+    "password": "mav12345",
     "profile": "mav-hotspot"
   },
   "oled": {
@@ -73,7 +74,13 @@
     "restart_on_egress_change": true,
     "container": "mavsphere-agent",
     "settle_seconds": 8,
-    "min_interval_seconds": 90
+    "min_interval_seconds": 90,
+    "bitrate": {
+      "enabled": true,
+      "wifi_bps": 5000000,
+      "lte_bps": 150000,
+      "api": "http://127.0.0.1:8090"
+    }
   },
   "tft": {
     "enabled": true,

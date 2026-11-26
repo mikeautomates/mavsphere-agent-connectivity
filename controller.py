@@ -155,6 +155,11 @@ class Hotspot:
         return rc == 0 and self.profile in out.splitlines()
 
     def _new_password(self):
+        fixed = str(self.h.get("password") or "")
+        if fixed:
+            if 8 <= len(fixed) <= 63:
+                return fixed
+            log("[hotspot] hotspot.password must be 8-63 characters; using a random one instead")
         alphabet = string.ascii_letters + string.digits
         alphabet = alphabet.translate({ord(c): None for c in "0Oo1lI"})  # easy to read on a tiny OLED
         return "".join(secrets.choice(alphabet) for _ in range(10))
@@ -351,7 +356,7 @@ def step(cfg, hotspot, now=None, link=None, shaper=None, stats=None, watcher=Non
         lte_if = next((l["iface"] for l in state["links"] if l["label"] == "LTE"), None)
         state.setdefault("lte", {}).update(stats.step(now, lte_if))
     if watcher is not None:
-        watcher.step(now, state["egress"]["iface"])
+        watcher.step(now, state["egress"]["iface"], state["egress"]["label"])
         state["agent"] = watcher.info()
     write_json(STATE_FILE, state, 0o644)
     write_json(SECRETS_FILE, {"password": hotspot.password if hotspot.active else ""}, 0o600)
