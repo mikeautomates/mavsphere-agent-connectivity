@@ -8,6 +8,14 @@
     "rmnet",
     "enx"
   ],
+  "ignore_prefixes": [
+    "lo",
+    "docker",
+    "veth",
+    "br-",
+    "virbr",
+    "tailscale"
+  ],
   "link": {
     "wifi_metric": 600,
     "lte_metric": 700,
@@ -32,13 +40,40 @@
       "daily_mb_cap": 60,
       "busy_kbit": 400
     },
-    "video_share": 0.6
+    "video_share": 0.6,
+    "modem_at_port": "/dev/ttyUSB2",
+    "signal_poll_seconds": 20
   },
   "hotspot": {
     "enabled": true,
-    "grace_seconds": 60,
+    "grace_seconds": 150,
     "retry_seconds": 300,
-    "ssid": ""
+    "ssid": "",
+    "profile": "mav-hotspot"
+  },
+  "oled": {
+    "enabled": true,
+    "i2c_bus": 1,
+    "i2c_address": 60,
+    "rotate_180": false,
+    "controller": "ssd1306",
+    "page_seconds": 5
+  },
+  "ui": {
+    "enabled": true,
+    "port": 8091,
+    "bind": "0.0.0.0"
+  },
+  "button": {
+    "enabled": true,
+    "pin": 17,
+    "long_seconds": 3.0
+  },
+  "agent": {
+    "restart_on_egress_change": true,
+    "container": "mavsphere-agent",
+    "settle_seconds": 8,
+    "min_interval_seconds": 90
   },
   "tft": {
     "enabled": true,
@@ -61,14 +96,6 @@
     "udp_listen": "127.0.0.1:14601",
     "alert_hold_seconds": 60,
     "link_timeout_seconds": 5
-  },
-  "display": {
-    "enabled": false,
-    "i2c_bus": 1,
-    "i2c_address": 60,
-    "rotate_180": false,
-    "page_seconds": 5,
-    "controller": "ssd1306"
   },
   "fc_display": {
     "enabled": false,

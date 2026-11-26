@@ -10,7 +10,8 @@ agent does not depend on it; run your own controller instead if you prefer.
 - `portal.py` – the small WiFi setup web page (standard library only), served
   only while the hotspot is up.
 - `tft_display.py` + `tft_driver.py` – the colour TFT dashboard (read-only): links, which one carries data, FC mode / armed / GPS / battery / messages, and the setup-hotspot details.
-- `display.py` – legacy: the same link status on an SSD1306 OLED (off by default).
+- `oled_lte.py` – 0.96" I2C OLED: LTE signal bars + today's data use, alternating with a live upload-speed graph.
+- `webui.py` – connectivity web page (port 8091, password). `button.py` – physical button. `modem.py` – LTE signal / data use / rates. `egress.py` – restarts the agent when the active link changes.
 - `fc_display.py` – legacy optional second OLED: flight-controller mode, armed state,
   GPS / battery and FC messages (read-only; see below). `fc_parser.py` is its
   small dependency-free MAVLink reader and `oled_driver.py` the shared driver.
@@ -48,6 +49,24 @@ install), and the wiring above.
 The TFT listens on MAVProxy's spare output `udp:127.0.0.1:14601`. Do not enable the legacy `fc_display`
 OLED at the same time (same port).
 
+## Controls: web page, button, OLED
+- **Web page:** `http://<pi-ip>:8091` (works on WiFi, and over the LTE address only from the Pi itself). Sign in with
+  the password from `sudo mavsphere-conn ui-password` (`--reset` makes a new one). Choose AUTO / WIFI / LTE, see signal,
+  upload speed, shaping, today's data use, the recommended video bitrate, start a speed test, start or stop the setup
+  hotspot, and join a different WiFi (`/wifi`). It is plain HTTP: keep it to networks you trust. Five wrong passwords
+  lock that address out for a minute.
+- **Button:** a momentary switch between GPIO17 (pin 11) and GND (pin 9). Short press cycles auto -> lte -> wifi;
+  hold 3 s starts or stops the setup hotspot (WiFi drops while it is on). The TFT shows the mode.
+- **OLED:** page 1 signal bars, dBm and today's data (up / down); page 2 the upload speed over the last few minutes with
+  the CAKE limit as a dotted line. Signal comes from the modem's AT port (`lte.modem_at_port`, default `/dev/ttyUSB2`).
+- **Link changes:** when the active link changes (WiFi <-> LTE, by hand, by the button, or because WiFi dropped) the
+  connectivity service restarts the agent container after the new link has been stable for 8 s, so the agent
+  reconnects straight away instead of waiting for old connections to time out. No Pi reboot is needed. Set
+  `agent.restart_on_egress_change` to false to turn this off. It never fires at startup or more than once per 90 s.
+- **Agent page hint:** `agent-lte-hint.patch` (in this package; apply it in the agent repo with `git apply`, then rebuild the image) adds a small panel to the agent's settings page showing
+  the active link and the recommended LTE bitrate, with buttons that fill in the H.264 and WebRTC max fields.
+  It reads `http://127.0.0.1:8091/api/lte-hint`, which the Pi itself can read without a login.
+
 ## Link choice, LTE speed test and CAKE shaping
 `mavsphere-conn status | mode auto|wifi|lte | speedtest` (mode and speedtest need sudo).
 - **auto** (default): WiFi preferred, LTE is the fallback. **lte**: LTE carries traffic even when WiFi is up
@@ -69,10 +88,10 @@ OLED at the same time (same port).
   to `recommended_video_kbps`. Until then set the agent's max bitrate for LTE by hand.
 
 ## Install
-`sudo bash install.sh` then reboot if SPI was just enabled. The legacy OLED services are disabled by the installer.
+`sudo bash install.sh` then reboot if SPI was just enabled. 
 
 ## Setup hotspot and WiFi page
-No WiFi connection for `grace_seconds` (60) -> hotspot `<hostname>-setup` with a
+No WiFi connection for `grace_seconds` (150) -> hotspot `<hostname>-setup` with a
 random password. The TFT alternates between normal status and the SSID /
 password / address. Join it on your phone: most phones open the setup page by
 themselves (otherwise browse to `http://10.42.0.1`). Pick your home network,
@@ -130,7 +149,11 @@ the FC. Enable it in `/etc/mavsphere-connectivity/config.json`
   "link_mode": "auto",
   "lte": {"present": true, "iface": "enx1a85f3e1e38d", "active": false, "upload_kbps": 4363,
           "measured_at": 1764000000.0, "test": "idle",
-          "shaping": {"status": "off", "kbit": null}, "recommended_video_kbps": 2617}
+          "shaping": {"status": "off", "kbit": null}, "recommended_video_kbps": 2617,
+          "signal": {"csq": 19, "dbm": -75, "bars": 4},
+          "usage": {"day": "2026-11-26", "tx_mb": 12.3, "rx_mb": 111.1, "total_mb": 123.4},
+          "tx_kbps": 0, "rx_kbps": 0},
+  "agent": {"last_restart": null, "reason": ""}
 }
 ```
 `egress.label` is null when there is no route to the internet.

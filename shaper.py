@@ -128,6 +128,10 @@ class Shaper:
         st = self.st
         path = None
         try:
+            # Measure the link, not our own limit: lift CAKE for the test.
+            if self.applied and self.applied[0] == iface:
+                run_rc("tc", "qdisc", "replace", "dev", iface, "root", "cake",
+                       "bandwidth", "100000kbit", *self.sh["options"].split())
             fd, path = tempfile.mkstemp(prefix="lte-up-")
             with os.fdopen(fd, "wb") as f:
                 f.write(os.urandom(int(st["bytes"])))
@@ -146,6 +150,7 @@ class Shaper:
         except Exception as e:
             self.test_result = ("failed", str(e), 0)
         finally:
+            self.applied = None                      # force CAKE to be re-installed at the new rate
             if path:
                 try:
                     os.unlink(path)
@@ -219,6 +224,8 @@ class Shaper:
         return self.module_ok
 
     def apply(self, iface, now):
+        if self.test_thread and self.test_thread.is_alive():
+            return                                    # test in progress: leave the qdisc alone
         want = self.kbit()
         cur = self.applied
         if cur and cur[0] == iface and abs(cur[1] - want) <= cur[1] * 0.1:
@@ -248,15 +255,8 @@ class Shaper:
         self.shape_status = "off"
 
     # ---- one loop tick -----------------------------------------------
-    def step(self, now, links, egress_iface, mode):
+    def step(self, now, links, egress_iface, mode, requested=False):
         lte = next((l for l in links if l["label"] == "LTE"), None)
-        requested = False
-        try:
-            with open(cc.REQUEST_FILE) as f:
-                requested = f.read().strip() == "speedtest"
-            os.unlink(cc.REQUEST_FILE)
-        except OSError:
-            pass
         if lte is None:
             self.clear()
             self.was_active = False
@@ -269,7 +269,8 @@ class Shaper:
         elif self.applied:
             self.clear()
         self.maybe_test(now, iface, active, mode, requested)
-        if self.sh["enabled"] and self.applied and self.applied[1] != self.kbit():
+        ap = self.applied
+        if self.sh["enabled"] and ap and ap[1] != self.kbit():
             self.apply(iface, now)                    # a new measurement arrived
         self.was_active = active
         return self.info(iface, active)

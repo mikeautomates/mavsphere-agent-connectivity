@@ -17,8 +17,8 @@ echo i2c-dev > /etc/modules-load.d/i2c-dev.conf
 
 # Code
 install -d /opt/mavsphere-connectivity
-install -m 644 "$HERE/conn_common.py" "$HERE/portal.py" "$HERE/oled_driver.py" "$HERE/tft_driver.py" "$HERE/shaper.py" "$HERE/fc_parser.py" /opt/mavsphere-connectivity/
-install -m 755 "$HERE/controller.py" "$HERE/display.py" "$HERE/tft_display.py" "$HERE/fc_display.py" "$HERE/connctl.py" /opt/mavsphere-connectivity/
+install -m 644 "$HERE/conn_common.py" "$HERE/portal.py" "$HERE/oled_driver.py" "$HERE/tft_driver.py" "$HERE/shaper.py" "$HERE/modem.py" "$HERE/egress.py" "$HERE/webui.py" "$HERE/fc_parser.py" /opt/mavsphere-connectivity/
+install -m 755 "$HERE/controller.py" "$HERE/oled_lte.py" "$HERE/button.py" "$HERE/tft_display.py" "$HERE/fc_display.py" "$HERE/connctl.py" /opt/mavsphere-connectivity/
 ln -sf /opt/mavsphere-connectivity/connctl.py /usr/local/bin/mavsphere-conn
 install -d /var/lib/mavsphere-connectivity
 echo sch_cake > /etc/modules-load.d/sch_cake.conf     # CAKE traffic shaper for the LTE uplink
@@ -73,12 +73,26 @@ EOF
 
 cat > /etc/systemd/system/mavsphere-oled.service <<'EOF'
 [Unit]
-Description=MavSphere connectivity OLED display
+Description=MavSphere LTE OLED (signal, data use, upload graph)
 After=mavsphere-connectivity.service
 Wants=mavsphere-connectivity.service
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/mavsphere-connectivity/display.py
+ExecStart=/usr/bin/python3 /opt/mavsphere-connectivity/oled_lte.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/mavsphere-button.service <<'EOF'
+[Unit]
+Description=MavSphere mode button (short = cycle link mode, hold = setup hotspot)
+After=mavsphere-connectivity.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/mavsphere-connectivity/button.py
 Restart=on-failure
 RestartSec=5
 
@@ -106,10 +120,14 @@ systemctl enable mavsphere-tft.service
 systemctl restart mavsphere-tft.service || true
 # OLED services are legacy and idle unless enabled in the config. Never enable
 # fc_display together with the TFT: both listen on UDP 14601.
-systemctl disable --now mavsphere-oled.service mavsphere-fc-oled.service 2>/dev/null || true
+systemctl disable --now mavsphere-fc-oled.service 2>/dev/null || true   # legacy, conflicts with the TFT
+systemctl enable mavsphere-oled.service mavsphere-button.service
+systemctl restart mavsphere-oled.service mavsphere-button.service || true
 echo
 echo "Done. If SPI was only just enabled, reboot once:  sudo reboot"
 echo "Status: mavsphere-conn status      Link: sudo mavsphere-conn mode auto|wifi|lte      LTE test: sudo mavsphere-conn speedtest"
 echo "State:  cat /run/mavsphere-connectivity/state.json"
 echo "Config: /etc/mavsphere-connectivity/config.json (see README.md)"
+echo "Web page:  http://<this-pi>:8091   password: sudo mavsphere-conn ui-password"
+echo "Button:    GPIO17 (pin 11) to GND (pin 9): short press = cycle mode, hold 3 s = setup hotspot"
 echo "Colours or edges wrong?  sudo systemctl stop mavsphere-tft && sudo python3 /opt/mavsphere-connectivity/tft_display.py --test"

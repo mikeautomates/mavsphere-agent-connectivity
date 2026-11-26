@@ -23,9 +23,12 @@ import threading
 import time
 
 from conn_common import (SECRETS_FILE, STATE_DIR, STATE_FILE, label_for,
-                         load_config, run, run_rc)
+                         load_config, pop_requests, run, run_rc)
 from portal import Portal
+from egress import EgressWatcher
+from modem import LteStats
 from shaper import LinkMode, Shaper, read_mode
+from webui import WebUI
 
 LOOP_SECONDS = 3
 HOTSPOT_RETRY_AFTER_FAIL = 30
@@ -214,18 +217,34 @@ class Hotspot:
         self.no_wifi_since = now
         log("[hotspot] stopped")
 
+    def toggle(self, now):
+        """Button / web UI: start the setup hotspot, or stop it and go back to saved WiFi."""
+        if self.busy:
+            return
+        if self.active:
+            self.stop(now)
+        else:
+            self.start(now)
+
+    def networks_for_ui(self, rescan=False):
+        if self.active:
+            return self.networks        # the radio is an AP; use the scan from before it started
+        if rescan or not self.networks:
+            self.networks = self.scan()
+        return self.networks
+
     # ---- joining a home network from the portal ----------------------
     def request_join(self, ssid, password):
         if self.busy:
             return False
         self.busy = True
         self.setup = {"status": "connecting", "target_ssid": ssid, "message": ""}
-        threading.Thread(target=self._join, args=(ssid, password), daemon=True).start()
+        threading.Thread(target=self._join, args=(ssid, password, self.active), daemon=True).start()
         return True
 
-    def _join(self, ssid, password):
+    def _join(self, ssid, password, from_hotspot=True):
         try:
-            time.sleep(JOIN_DELAY)
+            time.sleep(JOIN_DELAY if from_hotspot else 0.5)
             keep_password = self.password
             self._teardown_ap()
             name = f"mavsphere-{ssid}"[:60]
@@ -249,7 +268,11 @@ class Hotspot:
                 self.password = keep_password
                 self.setup = {"status": "failed", "target_ssid": ssid,
                               "message": f"Could not join {ssid}. Check the password and try again."}
-                self.start(time.time(), reuse_password=True)
+                if from_hotspot:
+                    self.start(time.time(), reuse_password=True)
+                else:
+                    self.password = ""
+                    run_rc("nmcli", "device", "connect", self.wifi, timeout=30)   # back to saved WiFi
         except Exception as e:
             log(f"[join] error: {e!r}")
         finally:
@@ -305,8 +328,14 @@ def build_state(cfg, hotspot):
     return state, wifi_up
 
 
-def step(cfg, hotspot, now=None, link=None, shaper=None):
+LATEST = {"state": None}      # last state written, for the web UI
+
+
+def step(cfg, hotspot, now=None, link=None, shaper=None, stats=None, watcher=None):
     now = time.time() if now is None else now
+    requests = pop_requests()
+    if "hotspot" in requests:
+        hotspot.toggle(now)
     state, wifi_up = build_state(cfg, hotspot)
     hotspot.step(wifi_up, now)
     if hotspot.active != state["hotspot"]["active"]:  # started/stopped this tick
@@ -316,9 +345,17 @@ def step(cfg, hotspot, now=None, link=None, shaper=None):
     if link is not None:
         link.step(now, state["links"], mode)
     if shaper is not None:
-        state["lte"] = shaper.step(now, state["links"], state["egress"]["iface"], mode)
+        state["lte"] = shaper.step(now, state["links"], state["egress"]["iface"], mode,
+                                   requested="speedtest" in requests)
+    if stats is not None:
+        lte_if = next((l["iface"] for l in state["links"] if l["label"] == "LTE"), None)
+        state.setdefault("lte", {}).update(stats.step(now, lte_if))
+    if watcher is not None:
+        watcher.step(now, state["egress"]["iface"])
+        state["agent"] = watcher.info()
     write_json(STATE_FILE, state, 0o644)
     write_json(SECRETS_FILE, {"password": hotspot.password if hotspot.active else ""}, 0o600)
+    LATEST["state"] = state
     return state
 
 
@@ -326,6 +363,12 @@ def main():
     cfg = load_config()
     hotspot = Hotspot(cfg)
     link, shaper = LinkMode(cfg), Shaper(cfg)
+    stats, watcher = LteStats(cfg), EgressWatcher(cfg)
+    if cfg["ui"]["enabled"]:
+        try:
+            WebUI(cfg, hotspot, lambda: LATEST["state"]).start()
+        except OSError as e:
+            log(f"[ui] cannot listen on port {cfg['ui']['port']}: {e}")
     # Never come up in hotspot mode just because a stale profile survived a reboot.
     hotspot.stop(reconnect=False)
 
@@ -339,7 +382,7 @@ def main():
     log("[connectivity] controller started")
     while True:
         try:
-            step(cfg, hotspot, link=link, shaper=shaper)
+            step(cfg, hotspot, link=link, shaper=shaper, stats=stats, watcher=watcher)
         except Exception as e:  # keep running whatever happens
             log(f"[connectivity] loop error: {e!r}")
         time.sleep(LOOP_SECONDS)
